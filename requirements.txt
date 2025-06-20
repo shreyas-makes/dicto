@@ -1,12 +1,12 @@
+# Core dependencies for Dicto transcription wrapper
+# Built-in modules (subprocess, pathlib, logging, tempfile, time, os, sys) are not listed
+
+# Required third-party packages for the full app (dicto_app.py)
 pyaudio==0.2.11
-pynput==1.7.6
+pynput==1.7.6  
 pydub==0.25.1
 plyer==2.1.0
 AppKit==0.2.8
-subprocess
-pathlib
-logging
-tempfile
-time
-os
-sys 
+
+# Note: dicto_core.py only uses built-in Python modules
+# No additional dependencies required for the core transcription engine 
