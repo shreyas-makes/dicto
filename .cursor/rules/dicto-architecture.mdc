@@ -1,0 +1,135 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Dicto - Local AI Transcription System
+
+## Project Overview
+Dicto is a local, offline AI transcription system for macOS that combines SoX-based audio recording with whisper.cpp for speech-to-text conversion. The system prioritizes privacy by keeping all processing local and provides optimized performance through Metal acceleration on Apple Silicon.
+
+## Core Architecture
+
+### Main Components
+- **[audio_recorder.py](mdc:audio_recorder.py)** - AudioRecorder class handling SoX-based audio recording
+- **[dicto_core.py](mdc:dicto_core.py)** - TranscriptionEngine class wrapping whisper.cpp functionality  
+- **[test_recording.py](mdc:test_recording.py)** - Comprehensive test suite for the complete pipeline
+- **[whisper.cpp/](mdc:whisper.cpp)** - Submodule containing the whisper.cpp implementation with Metal acceleration
+
+### Audio Recording Pipeline
+The AudioRecorder class in [audio_recorder.py](mdc:audio_recorder.py) provides:
+- **Microphone Permission Testing**: Pre-flight checks to prevent hanging on macOS
+- **SoX Integration**: 16kHz mono WAV recording optimized for Whisper
+- **Timeout Protection**: Prevents indefinite hanging on permission issues
+- **Automatic Cleanup**: Manages temporary audio files lifecycle
+- **Platform Detection**: macOS-specific behavior and error messages
+
+Key methods:
+- `test_microphone_access()` - Verifies microphone permissions before recording
+- `start_recording(duration=None)` - Begins audio capture with optional time limit
+- `stop_recording()` - Ends recording and returns audio file path
+- `check_dependencies()` - Validates SoX installation
+
+### Transcription Engine
+The TranscriptionEngine in [dicto_core.py](mdc:dicto_core.py) handles:
+- **Whisper.cpp Wrapper**: Subprocess management for whisper-cli binary
+- **Model Management**: Validates and loads whisper models
+- **Error Handling**: Comprehensive error detection and reporting
+- **Recording Integration**: Optional AudioRecorder integration
+- **Temporary File Management**: Automatic cleanup of transcription files
+
+Key methods:
+- `transcribe_file(audio_path)` - Transcribes existing audio files
+- `record_and_transcribe(duration)` - Complete recording + transcription workflow
+- `validate_setup()` - Checks whisper.cpp binary and model availability
+
+## Platform-Specific Considerations
+
+### macOS Requirements
+- **Microphone Permissions**: Apps need explicit permission to access audio input
+- **SoX Installation**: Available via Homebrew (`brew install sox`)
+- **Metal Acceleration**: Enabled for Apple Silicon performance optimization
+- **System Preferences**: Users may need to grant microphone access manually
+
+### Permission Handling
+The system includes robust permission checking:
+```python
+# Pre-flight microphone test to prevent hanging
+if not recorder.test_microphone_access():
+    # Provide clear guidance for permission setup
+    if recorder.is_macos:
+        error_msg += " Please grant microphone permission in System Preferences"
+```
+
+## Dependencies and Setup
+
+### External Dependencies
+- **SoX**: Audio recording and processing (`/opt/homebrew/bin/sox`)
+- **whisper.cpp**: AI transcription engine with Metal support
+- **Python**: Runtime environment with subprocess management
+
+### Directory Structure
+```
+dicto/
+├── audio_recorder.py      # SoX-based recording
+├── dicto_core.py         # Whisper.cpp wrapper
+├── test_recording.py     # Test suite
+├── whisper.cpp/          # Whisper.cpp submodule
+│   ├── build/bin/        # Compiled binaries
+│   └── models/           # AI models
+└── venv/                 # Python virtual environment
+```
+
+## Testing Strategy
+
+### Test Coverage
+[test_recording.py](mdc:test_recording.py) provides comprehensive testing:
+1. **SoX Installation**: Verifies audio recording capabilities
+2. **Whisper.cpp Setup**: Validates binary and model availability
+3. **Recording Pipeline**: Tests audio capture functionality
+4. **Transcription Pipeline**: Validates speech-to-text conversion
+5. **Complete Workflow**: End-to-end recording and transcription
+6. **Interactive Testing**: Manual recording verification
+
+### Error Scenarios
+The system handles common failure modes:
+- Missing microphone permissions
+- SoX installation issues
+- Whisper.cpp binary/model problems
+- Audio file corruption
+- Timeout and hanging prevention
+
+## Development Patterns
+
+### Error Handling
+All components use consistent error handling patterns:
+```python
+try:
+    result = risky_operation()
+    if not result["success"]:
+        logger.error(f"Operation failed: {result['error']}")
+        return {"success": False, "error": result["error"]}
+except Exception as e:
+    logger.error(f"Unexpected error: {e}")
+    raise RuntimeError(f"Operation failed: {e}")
+```
+
+### Logging
+Comprehensive logging throughout the pipeline:
+- INFO: Normal operation status
+- WARNING: Non-fatal issues
+- ERROR: Failed operations with context
+
+### Resource Management
+- Automatic cleanup of temporary files
+- Proper subprocess termination
+- Thread management for monitoring
+- Signal handling for graceful shutdown
+
+## Future Extensions
+The architecture supports extensions for:
+- Multiple audio input sources
+- Additional AI models
+- Real-time transcription streaming
+- Batch processing capabilities
+- Custom audio preprocessing
