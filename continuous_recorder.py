@@ -21,9 +21,14 @@ import queue
 try:
     from pynput import keyboard
     from pynput.keyboard import Key, KeyCode
+    PYNPUT_AVAILABLE = True
 except ImportError:
-    print("Error: pynput not installed. Install with: pip install pynput")
-    sys.exit(1)
+    print("Warning: pynput not installed. Install with: pip install pynput")
+    print("Continuous recording functionality will be limited")
+    keyboard = None
+    Key = None
+    KeyCode = None
+    PYNPUT_AVAILABLE = False
 
 # Import local modules
 try:
@@ -56,6 +61,13 @@ class ContinuousRecorder:
             temp_dir: Directory for temporary audio files.
         """
         self.logger = logging.getLogger(__name__)
+        
+        # Check if pynput is available
+        if not PYNPUT_AVAILABLE:
+            self.logger.warning("pynput not available - continuous recording disabled")
+            self.pynput_available = False
+        else:
+            self.pynput_available = True
         
         # Recording parameters
         self.chunk_duration = chunk_duration
@@ -125,6 +137,10 @@ class ContinuousRecorder:
             bool: True if monitoring started successfully.
         """
         try:
+            if not self.pynput_available:
+                self.logger.error("Cannot start monitoring - pynput not available")
+                return False
+            
             if self.key_listener and self.key_listener.running:
                 self.logger.warning("Key monitoring already active")
                 return True

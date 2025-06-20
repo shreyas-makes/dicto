@@ -37,7 +37,7 @@ import threading
 import signal
 import tempfile
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 # Third-party imports
 try:
@@ -295,11 +295,26 @@ class DictoApp:
         self.is_running = False
         self.is_recording = False
         self.recording_start_time = None
+        self.continuous_mode = False
         
         # Initialize components
         self.logger.info("Initializing Dicto application...")
         
         try:
+            # Initialize vocabulary manager
+            self.vocabulary_manager = VocabularyManager()
+            self.logger.info("✅ Vocabulary manager initialized")
+            
+            # Initialize continuous recorder
+            self.continuous_recorder = ContinuousRecorder()
+            self.continuous_recorder.set_callbacks(
+                on_start=self._on_continuous_start,
+                on_stop=self._on_continuous_stop,
+                on_chunk=self._on_chunk_complete,
+                on_session=self._on_session_complete
+            )
+            self.logger.info("✅ Continuous recorder initialized")
+            
             # Initialize transcription engine
             self.transcription_engine = TranscriptionEngine(
                 whisper_binary_path=whisper_binary_path,
@@ -316,7 +331,7 @@ class DictoApp:
             self.notifications = NotificationManager()
             self.logger.info("✅ Notification manager initialized")
             
-            # Initialize global hotkey manager
+            # Initialize global hotkey manager (for fallback)
             self.hotkey_manager = GlobalHotkeyManager(self._handle_hotkey)
             self.logger.info("✅ Hotkey manager initialized")
             
@@ -324,6 +339,156 @@ class DictoApp:
             self.logger.error(f"Failed to initialize Dicto: {e}")
             self.notifications.notify_error(f"Initialization failed: {e}")
             raise
+    
+    def _on_continuous_start(self):
+        """Callback when continuous recording starts."""
+        self.continuous_mode = True
+        self.notifications.show_notification(
+            "🔴 Continuous Recording",
+            "Hold Ctrl+V to continue recording"
+        )
+        self.logger.info("🔴 Continuous recording started")
+    
+    def _on_continuous_stop(self):
+        """Callback when continuous recording stops."""
+        self.continuous_mode = False
+        self.notifications.show_notification(
+            "⏹️ Processing Recording",
+            "Combining chunks and transcribing..."
+        )
+        self.logger.info("⏹️ Continuous recording stopped")
+    
+    def _on_chunk_complete(self, chunk_path: str):
+        """Callback when a recording chunk is completed."""
+        self.logger.debug(f"📁 Chunk completed: {Path(chunk_path).name}")
+    
+    def _on_session_complete(self, chunk_paths: List[str]):
+        """Callback when a recording session is completed."""
+        try:
+            self.logger.info(f"📂 Session completed with {len(chunk_paths)} chunks")
+            
+            if not chunk_paths:
+                self.notifications.notify_error("No audio recorded")
+                return
+            
+            # Combine chunks into single file
+            combined_file = Path(tempfile.gettempdir()) / "dicto_combined.wav"
+            
+            if self.continuous_recorder.combine_chunks(str(combined_file)):
+                # Transcribe the combined file
+                self._transcribe_with_vocabulary(str(combined_file))
+                
+                # Clean up combined file
+                if combined_file.exists():
+                    combined_file.unlink()
+            else:
+                self.notifications.notify_error("Failed to combine audio chunks")
+                
+        except Exception as e:
+            self.logger.error(f"Error processing session: {e}")
+            self.notifications.notify_error(f"Session processing failed: {e}")
+    
+    def _transcribe_with_vocabulary(self, audio_path: str):
+        """Transcribe audio with vocabulary enhancement."""
+        try:
+            # Get transcription result
+            result = self.transcription_engine.transcribe_file(
+                audio_path, 
+                language="en", 
+                no_timestamps=False  # Include timestamps for longer recordings
+            )
+            
+            if result["success"]:
+                text = result["text"].strip()
+                
+                if text:
+                    # Apply vocabulary enhancements
+                    enhanced_text = self._enhance_with_vocabulary(text)
+                    
+                    # Copy to clipboard
+                    if self.clipboard.set_text(enhanced_text):
+                        # Calculate confidence score
+                        confidence = self._calculate_confidence(result, enhanced_text)
+                        
+                        # Show success notification with confidence
+                        self.notifications.show_notification(
+                            "✅ Transcription Complete",
+                            f"Confidence: {confidence:.0%} | {enhanced_text[:50]}..."
+                        )
+                        self.logger.info(f"✅ Enhanced transcription (confidence: {confidence:.2%}): {enhanced_text[:100]}...")
+                    else:
+                        raise RuntimeError("Failed to copy to clipboard")
+                else:
+                    self.notifications.notify_error("No speech detected")
+            else:
+                raise RuntimeError(f"Transcription failed: {result['error']}")
+                
+        except Exception as e:
+            self.logger.error(f"Transcription with vocabulary failed: {e}")
+            self.notifications.notify_error(f"Transcription failed: {e}")
+    
+    def _enhance_with_vocabulary(self, text: str) -> str:
+        """Enhance transcription text using custom vocabulary."""
+        if not self.vocabulary_manager:
+            return text
+        
+        try:
+            # Get vocabulary suggestions based on context
+            suggestions = self.vocabulary_manager.get_vocabulary_suggestions(text)
+            
+            enhanced_text = text
+            
+            # Apply proper noun capitalization and custom vocabulary
+            vocab_data = self.vocabulary_manager.get_all_vocabulary()
+            
+            # Replace with proper nouns (case-sensitive)
+            for proper_noun in vocab_data.get("proper_nouns", []):
+                # Simple word boundary replacement
+                import re
+                pattern = r'\b' + re.escape(proper_noun.lower()) + r'\b'
+                enhanced_text = re.sub(pattern, proper_noun, enhanced_text, flags=re.IGNORECASE)
+            
+            # Log vocabulary enhancement
+            if enhanced_text != text:
+                self.logger.info(f"Vocabulary enhancement applied: {len(suggestions)} suggestions used")
+            
+            return enhanced_text
+            
+        except Exception as e:
+            self.logger.warning(f"Vocabulary enhancement failed: {e}")
+            return text
+    
+    def _calculate_confidence(self, transcription_result: Dict[str, Any], enhanced_text: str) -> float:
+        """Calculate confidence score for the transcription."""
+        try:
+            # Base confidence from transcription duration and text length
+            duration = transcription_result.get("duration", 1.0)
+            text_length = len(enhanced_text.split())
+            
+            # Basic confidence calculation
+            # More words per second generally indicates clearer speech
+            words_per_second = text_length / max(duration, 0.1)
+            
+            # Normalize to reasonable range (0.3 to 4.0 words/second)
+            if words_per_second < 0.5:
+                base_confidence = 0.3  # Very slow speech
+            elif words_per_second > 4.0:
+                base_confidence = 0.7  # Very fast speech
+            else:
+                # Linear scale between 0.5 and 1.0 for 0.5-3.0 words/second
+                base_confidence = 0.5 + (min(words_per_second, 3.0) - 0.5) * 0.2
+            
+            # Boost confidence if vocabulary enhancements were applied
+            vocab_boost = 0.1 if self.vocabulary_manager else 0.0
+            
+            # Ensure confidence is between 0.0 and 1.0
+            confidence = min(1.0, max(0.0, base_confidence + vocab_boost))
+            
+            return confidence
+            
+        except Exception as e:
+            self.logger.warning(f"Confidence calculation failed: {e}")
+            return 0.5  # Default moderate confidence
     
     def _handle_hotkey(self):
         """
@@ -429,16 +594,21 @@ class DictoApp:
                     self.notifications.notify_error(error_msg)
                     return False
             
-            # Start global hotkey listener
-            if not self.hotkey_manager.start_listening():
-                raise RuntimeError("Failed to start global hotkey listener")
+            # Start continuous recorder monitoring
+            if self.continuous_recorder and self.continuous_recorder.start_continuous_monitoring():
+                self.logger.info("✅ Continuous recording monitoring started")
+            else:
+                # Fallback to simple hotkey manager
+                self.logger.warning("Falling back to simple hotkey mode")
+                if not self.hotkey_manager.start_listening():
+                    raise RuntimeError("Failed to start hotkey listener")
             
             self.is_running = True
             
             # Show startup notification
             self.notifications.show_notification(
                 "🎙️ Dicto Started",
-                "Press Cmd+V anywhere to start voice transcription"
+                "Hold Ctrl+V anywhere for continuous voice transcription"
             )
             
             self.logger.info("🎙️ Dicto is running. Press Cmd+V to start transcription.")
@@ -466,14 +636,24 @@ class DictoApp:
             self.logger.info("Shutting down Dicto...")
             self.is_running = False
             
+            # Stop continuous recorder
+            if self.continuous_recorder:
+                self.continuous_recorder.stop_continuous_monitoring()
+                self.logger.info("Stopped continuous recorder")
+            
             # Stop any active recording
             if self.is_recording:
                 self.transcription_engine.stop_recording()
                 self.is_recording = False
             
-            # Stop hotkey listener
+            # Stop hotkey listener (fallback)
             if self.hotkey_manager:
                 self.hotkey_manager.stop_listening()
+            
+            # Save vocabulary preferences
+            if self.vocabulary_manager:
+                self.vocabulary_manager.save_vocabulary_preferences()
+                self.logger.info("Saved vocabulary preferences")
             
             # Cleanup transcription engine
             if self.transcription_engine:

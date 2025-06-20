@@ -115,7 +115,7 @@ def test_continuous_recorder():
     print("=" * 60)
     
     try:
-        from continuous_recorder import ContinuousRecorder
+        from continuous_recorder import ContinuousRecorder, PYNPUT_AVAILABLE
         
         # Test with temporary directory
         test_dir = tempfile.mkdtemp(prefix="dicto_recorder_test_")
@@ -126,7 +126,11 @@ def test_continuous_recorder():
             max_session_duration=30.0,  # Short session for testing
             temp_dir=test_dir
         )
-        print("✅ ContinuousRecorder initialized")
+        
+        if PYNPUT_AVAILABLE:
+            print("✅ ContinuousRecorder initialized with pynput support")
+        else:
+            print("⚠️  ContinuousRecorder initialized without pynput (limited functionality)")
         
         print("\n2. Testing callback setup...")
         events = []
@@ -172,6 +176,8 @@ def test_continuous_recorder():
             
             recorder._stop_recording_session()
             print("✅ Recording session stopped manually")
+        else:
+            print("⚠️  Recording session simulation skipped (audio recording may not be available)")
         
         print(f"\n5. Events captured: {len(events)}")
         for event in events:
@@ -187,8 +193,12 @@ def test_continuous_recorder():
         print(f"✅ Cleaned up test directory")
         
         print("\n✅ ContinuousRecorder tests completed successfully!")
-        print("\nNote: Full CTRL+V functionality requires manual testing")
-        print("      Start the app and hold CTRL+V to test continuous recording")
+        if PYNPUT_AVAILABLE:
+            print("\nNote: Full CTRL+V functionality requires manual testing")
+            print("      Start the app and hold CTRL+V to test continuous recording")
+        else:
+            print("\nNote: Install pynput to enable CTRL+V continuous recording functionality")
+            print("      Run: pip install pynput")
         
         return True
         
@@ -261,8 +271,11 @@ def test_dependencies():
     ]
     
     optional_dependencies = [
-        ("pynput", "Global hotkey support"),
         ("audio_recorder", "Audio recording"),
+    ]
+    
+    pynput_test = [
+        ("pynput", "Global hotkey support"),
     ]
     
     print("\n1. Checking required dependencies...")
@@ -281,6 +294,14 @@ def test_dependencies():
             print(f"✅ {module:15} - {description}")
         except ImportError as e:
             print(f"⚠️  {module:15} - {description} - WARNING: {e}")
+    
+    print("\n3. Checking pynput (for continuous recording)...")
+    for module, description in pynput_test:
+        try:
+            __import__(module)
+            print(f"✅ {module:15} - {description}")
+        except ImportError as e:
+            print(f"⚠️  {module:15} - {description} - Install with: pip install pynput")
     
     print("\n✅ Dependency check completed!")
     return True
