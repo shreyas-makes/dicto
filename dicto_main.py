@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """
 Dicto Main - Enhanced system-wide voice transcription app for macOS
-Provides global hotkey (Cmd+V) for voice recording with enhanced audio processing,
-device selection, real-time monitoring, and automatic clipboard integration.
+Provides global hotkey (Ctrl+V) for voice recording with enhanced audio processing,
+device selection, real-time monitoring, automatic clipboard integration, and continuous recording.
 
-New Features in Task 5:
-- Multiple audio input device support
-- Real-time audio level monitoring  
-- Voice activity
+New Features in Task 6:
+- Custom vocabulary support for better accuracy
+- Continuous recording while Ctrl+V is held
+- Transcription confidence scoring
+- Timestamping for longer recordings
+- Enhanced audio buffer management
 
 Requirements:
-- Global Cmd+V hotkey for record/stop toggle
+- Global Ctrl+V hotkey for continuous record while held
 - Automatic clipboard integration
 - macOS native notifications
 - Background operation
 - Enhanced error handling with user feedback
+- Custom vocabulary injection
 
 Dependencies:
 - pynput: Global hotkey support
@@ -22,6 +25,8 @@ Dependencies:
 - plyer: Cross-platform notifications
 - dicto_core: TranscriptionEngine
 - audio_recorder: AudioRecorder
+- vocabulary_manager: VocabularyManager
+- continuous_recorder: ContinuousRecorder
 """
 
 import os
@@ -59,6 +64,18 @@ try:
     from dicto_core import TranscriptionEngine
 except ImportError:
     print("Error: dicto_core.py not found. Ensure it's in the same directory.")
+    sys.exit(1)
+
+try:
+    from vocabulary_manager import VocabularyManager
+except ImportError:
+    print("Error: vocabulary_manager.py not found. Ensure it's in the same directory.")
+    sys.exit(1)
+
+try:
+    from continuous_recorder import ContinuousRecorder
+except ImportError:
+    print("Error: continuous_recorder.py not found. Ensure it's in the same directory.")
     sys.exit(1)
 
 
