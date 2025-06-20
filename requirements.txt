@@ -2,4 +2,11 @@ pyaudio==0.2.11
 pynput==1.7.6
 pydub==0.25.1
 plyer==2.1.0
-AppKit==0.2.8 
+AppKit==0.2.8
+subprocess
+pathlib
+logging
+tempfile
+time
+os
+sys 

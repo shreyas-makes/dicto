@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Dicto - AI Transcription App with Global Hotkeys
-A simple transcription app using whisper.cpp that works with Cmd+V hotkey on Mac.
+Dicto Simple - AI Transcription App using macOS built-in audio recording
+A simple transcription app using whisper.cpp with global hotkeys, using system audio recording.
 """
 
 import os
@@ -13,38 +13,25 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-import pyaudio
-import wave
 from pynput import keyboard
-from pynput.keyboard import Key, KeyCode
 from plyer import notification
 import AppKit
 from AppKit import NSPasteboard, NSStringPboardType
 
 
-class DictoApp:
+class DictoSimple:
     def __init__(self):
         self.is_recording = False
-        self.audio_stream = None
-        self.audio_data = []
+        self.record_process = None
         self.whisper_path = Path("whisper.cpp/build/bin/whisper-cli")
         self.model_path = Path("whisper.cpp/models/ggml-base.en.bin")
         self.temp_dir = Path(tempfile.gettempdir()) / "dicto"
         self.temp_dir.mkdir(exist_ok=True)
         
-        # Audio settings
-        self.chunk = 1024
-        self.format = pyaudio.paInt16
-        self.channels = 1
-        self.rate = 16000
-        
-        # Initialize PyAudio
-        self.audio = pyaudio.PyAudio()
-        
         # Check if paths exist
         self.validate_setup()
         
-        print("🎤 Dicto AI Transcription App Started!")
+        print("🎤 Dicto Simple AI Transcription App Started!")
         print("📌 Press Cmd+V to start/stop recording")
         print("📌 Recording will automatically transcribe when stopped")
         print("📌 Transcription will be copied to clipboard")
@@ -56,6 +43,20 @@ class DictoApp:
             raise FileNotFoundError(f"Whisper CLI not found at {self.whisper_path}")
         if not self.model_path.exists():
             raise FileNotFoundError(f"Whisper model not found at {self.model_path}")
+        
+        # Check if sox is available for audio recording
+        try:
+            subprocess.run(["which", "sox"], check=True, capture_output=True)
+            print("✅ SoX found for audio recording")
+        except subprocess.CalledProcessError:
+            print("⚠️  SoX not found, installing via Homebrew...")
+            try:
+                subprocess.run(["brew", "install", "sox"], check=True)
+                print("✅ SoX installed successfully")
+            except subprocess.CalledProcessError:
+                print("❌ Failed to install SoX. Please install manually: brew install sox")
+                raise
+        
         print("✅ Whisper.cpp setup validated")
         
     def show_notification(self, title: str, message: str):
@@ -81,43 +82,32 @@ class DictoApp:
             print(f"Clipboard error: {e}")
     
     def start_recording(self):
-        """Start audio recording."""
+        """Start audio recording using SoX."""
         if self.is_recording:
             return
             
         try:
-            self.is_recording = True
-            self.audio_data = []
+            timestamp = int(time.time())
+            self.audio_file = self.temp_dir / f"recording_{timestamp}.wav"
             
-            self.audio_stream = self.audio.open(
-                format=self.format,
-                channels=self.channels,
-                rate=self.rate,
-                input=True,
-                frames_per_buffer=self.chunk
-            )
+            # Use SoX to record audio
+            cmd = [
+                "sox", "-t", "coreaudio", "default",
+                str(self.audio_file),
+                "rate", "16000",
+                "channels", "1"
+            ]
+            
+            self.record_process = subprocess.Popen(cmd)
+            self.is_recording = True
             
             print("🔴 Recording started...")
             self.show_notification("Dicto", "🔴 Recording started")
-            
-            # Record in background thread
-            self.record_thread = threading.Thread(target=self._record_audio)
-            self.record_thread.start()
             
         except Exception as e:
             print(f"Recording error: {e}")
             self.is_recording = False
             self.show_notification("Dicto Error", f"Recording failed: {e}")
-    
-    def _record_audio(self):
-        """Record audio in background thread."""
-        while self.is_recording:
-            try:
-                data = self.audio_stream.read(self.chunk, exception_on_overflow=False)
-                self.audio_data.append(data)
-            except Exception as e:
-                print(f"Audio capture error: {e}")
-                break
     
     def stop_recording(self):
         """Stop recording and transcribe."""
@@ -126,12 +116,10 @@ class DictoApp:
             
         self.is_recording = False
         
-        if self.audio_stream:
-            self.audio_stream.stop_stream()
-            self.audio_stream.close()
-            
-        if hasattr(self, 'record_thread'):
-            self.record_thread.join()
+        if self.record_process:
+            self.record_process.terminate()
+            self.record_process.wait()
+            self.record_process = None
             
         print("⏹️ Recording stopped. Transcribing...")
         self.show_notification("Dicto", "⏹️ Processing audio...")
@@ -142,24 +130,14 @@ class DictoApp:
     def _process_recording(self):
         """Process the recorded audio and transcribe it."""
         try:
-            if not self.audio_data:
+            if not hasattr(self, 'audio_file') or not self.audio_file.exists():
                 self.show_notification("Dicto", "No audio recorded")
                 return
             
-            # Save audio to temporary file
-            timestamp = int(time.time())
-            audio_file = self.temp_dir / f"recording_{timestamp}.wav"
-            
-            with wave.open(str(audio_file), 'wb') as wf:
-                wf.setnchannels(self.channels)
-                wf.setsampwidth(self.audio.get_sample_size(self.format))
-                wf.setframerate(self.rate)
-                wf.writeframes(b''.join(self.audio_data))
-            
-            print(f"💾 Audio saved to {audio_file}")
+            print(f"💾 Audio saved to {self.audio_file}")
             
             # Transcribe using whisper.cpp
-            transcription = self._transcribe_audio(audio_file)
+            transcription = self._transcribe_audio(self.audio_file)
             
             if transcription:
                 # Copy to clipboard
@@ -171,7 +149,7 @@ class DictoApp:
                 
             # Clean up temp file
             try:
-                audio_file.unlink()
+                self.audio_file.unlink()
             except Exception:
                 pass
                 
@@ -231,10 +209,9 @@ class DictoApp:
     
     def cleanup(self):
         """Clean up resources."""
-        if self.is_recording:
-            self.stop_recording()
-        if self.audio:
-            self.audio.terminate()
+        if self.is_recording and self.record_process:
+            self.record_process.terminate()
+            self.record_process.wait()
     
     def run(self):
         """Run the main application loop."""
@@ -243,9 +220,9 @@ class DictoApp:
             with keyboard.GlobalHotKeys({
                 '<cmd>+v': self.on_hotkey_triggered,
                 '<cmd>+q': self.on_quit_triggered
-            }):
+            }) as hotkeys:
                 # Keep the application running
-                keyboard.Listener(on_press=lambda key: None).join()
+                hotkeys.join()
                 
         except KeyboardInterrupt:
             print("\n👋 Shutting down Dicto...")
@@ -255,10 +232,10 @@ class DictoApp:
 
 def main():
     """Main entry point."""
-    print("🚀 Starting Dicto AI Transcription App...")
+    print("🚀 Starting Dicto Simple AI Transcription App...")
     
     try:
-        app = DictoApp()
+        app = DictoSimple()
         app.run()
     except Exception as e:
         print(f"❌ Fatal error: {e}")
