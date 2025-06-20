@@ -3,10 +3,40 @@
 
 # Required third-party packages for the full app (dicto_app.py)
 pyaudio==0.2.11
-pynput==1.7.6  
+pynput>=1.7.6  
 pydub==0.25.1
-plyer==2.1.0
+plyer>=2.1.0
 AppKit==0.2.8
 
 # Note: dicto_core.py only uses built-in Python modules
 # No additional dependencies required for the core transcription engine 
+
+# Dicto - System-wide voice transcription dependencies
+
+# Global hotkey support
+pynput>=1.7.6
+
+# Cross-platform notifications
+plyer>=2.1.0
+
+# macOS system integration (clipboard, notifications)
+pyobjc-framework-Cocoa>=9.0
+
+# Optional: Enhanced logging and debugging
+rich>=13.0.0 
+
+# Task 5: Enhanced Audio Processing Dependencies
+# Audio device enumeration and advanced processing
+sounddevice>=0.4.6
+
+# Additional audio format support (optional but recommended)
+# Install with: brew install ffmpeg
+# ffmpeg-python>=0.2.0
+
+# SoX is required for audio processing - install with: brew install sox
+# No Python package needed as we use SoX via subprocess
+
+# JSON parsing for device enumeration (built-in to Python 3.7+)
+# mimetypes for file type detection (built-in)
+# queue for thread-safe audio level monitoring (built-in)
+# threading for background audio processing (built-in) 
