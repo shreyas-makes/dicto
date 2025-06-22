@@ -30,12 +30,19 @@ A simple, offline AI transcription app for macOS that uses OpenAI's Whisper (via
    ./setup.sh
    ```
 
-2. **Grant Permissions** (Important!):
+2. **Set Up Python Virtual Environment**:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+3. **Grant Permissions** (Important!):
    - **Microphone**: Go to System Preferences → Security & Privacy → Privacy → Microphone
    - **Accessibility**: Go to System Preferences → Security & Privacy → Privacy → Accessibility
    - Add Terminal or your Python interpreter to both lists
 
-3. **Run the App**:
+4. **Run the App**:
    ```bash
    python3 dicto_app.py
    ```

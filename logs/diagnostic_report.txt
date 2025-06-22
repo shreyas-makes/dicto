@@ -1,0 +1,18 @@
+==================== Dicto Diagnostic Report ====================
+Timestamp: 2025-06-22 20:02:32
+Python Version: 3.9.6 (default, Feb  3 2024, 15:58:27) 
+[Clang 15.0.0 (clang-1500.3.9.4)]
+Platform: macOS-14.7.6-arm64-arm-64bit
+macOS Version: 14.7.6
+
+--- System Health ---
+Accessibility ( अनुमान ): Potentially OK (cannot verify programmatically)
+Whisper Model: Not Found
+Free Disk Space: 39 GB
+
+--- Recent Log Entries ---
+2025-06-22 20:02:32,533 - Dicto - INFO - [MainThread] - Logging initialized. (error_handler.py:56)
+
+2025-06-22 20:02:32,533 - Dicto - INFO - [MainThread] - Generating diagnostic report... (error_handler.py:92)
+
+=======================================================

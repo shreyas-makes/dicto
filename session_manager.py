@@ -632,7 +632,12 @@ class SessionManager:
     def __del__(self):
         """Cleanup when object is destroyed."""
         try:
-            # Backup before destruction
-            self.backup_sessions()
-        except:
+            # Check if backup_sessions method still exists and object is properly initialized
+            if hasattr(self, 'backup_sessions') and hasattr(self, 'json_backup_path'):
+                self.backup_sessions()
+        except (NameError, AttributeError, TypeError):
+            # Handle cases where builtins like 'open' are not available during destruction
+            pass
+        except Exception:
+            # Silent fail for any other cleanup errors during destruction
             pass 

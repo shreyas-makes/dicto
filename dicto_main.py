@@ -102,6 +102,18 @@ except ImportError:
     print("Error: session_manager.py not found. Ensure it's in the same directory.")
     sys.exit(1)
 
+try:
+    from error_handler import ErrorHandler
+except ImportError:
+    print("Error: error_handler.py not found. Ensure it's in the same directory.")
+    sys.exit(1)
+
+try:
+    from config_manager import ConfigManager
+except ImportError:
+    print("Error: config_manager.py not found. Ensure it's in the same directory.")
+    sys.exit(1)
+
 
 class ClipboardManager:
     """
@@ -111,7 +123,7 @@ class ClipboardManager:
     
     def __init__(self):
         self.pasteboard = NSPasteboard.generalPasteboard()
-        self.logger = logging.getLogger(__name__ + ".ClipboardManager")
+        self.logger = logging.getLogger("Dicto.ClipboardManager")
     
     def set_text(self, text: str) -> bool:
         """
@@ -155,7 +167,7 @@ class NotificationManager:
     
     def __init__(self, app_name: str = "Dicto"):
         self.app_name = app_name
-        self.logger = logging.getLogger(__name__ + ".NotificationManager")
+        self.logger = logging.getLogger("Dicto.NotificationManager")
         self.use_native = False  # Flag to switch to native notifications
         
         # Test plyer on initialization
@@ -278,8 +290,19 @@ class DictoApp(rumps.App):
     """
     def __init__(self, whisper_binary_path: Optional[str] = None, model_path: Optional[str] = None):
         super(DictoApp, self).__init__("Dicto", icon=None, quit_button=None)
-        self.logger = self._setup_logging()
+        
+        self.app_support_dir = Path.home() / "Library" / "Application Support" / "Dicto"
+        self.app_support_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialize error handler first
+        self.error_handler = ErrorHandler(log_dir=str(self.app_support_dir / "logs"))
+        self.logger = self.error_handler.logger
         self.logger.info("DictoApp initializing...")
+        
+        # Initialize configuration manager
+        self.config_manager = ConfigManager()
+        self.current_settings = self.config_manager.get_current_settings()
+        self.logger.info(f"Configuration loaded. Current profile: {self.current_settings.get('profile_name', 'default')}")
 
         self.whisper_binary_path = whisper_binary_path or "./whisper.cpp/main"
         self.model_path = model_path or "./whisper.cpp/models/ggml-base.en.bin"
@@ -294,11 +317,14 @@ class DictoApp(rumps.App):
 
         self.clipboard_manager = ClipboardManager()
         self.notification_manager = NotificationManager()
+        self.session_manager = SessionManager(str(self.app_support_dir / "history.json"))
         self.auto_text_inserter = AutoTextInserter()
 
-        # Initialize enhanced UI components
-        self.menu_bar_manager = MenuBarManager("Dicto")
-        self.session_manager = SessionManager()
+        # UI and state
+        self.menu_bar_manager = MenuBarManager("Dicto", rumps_app=self)
+        self.state_lock = threading.Lock()
+        self.is_processing = False
+        self.is_hotkey_pressed = False
         
         # Setup menu bar callbacks
         self._setup_menu_bar_callbacks()
@@ -321,12 +347,6 @@ class DictoApp(rumps.App):
 
         self.logger.info("DictoApp initialized successfully with enhanced UI.")
 
-    def _setup_logging(self):
-        logging.basicConfig(level=logging.INFO,
-                            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                            handlers=[logging.StreamHandler(sys.stdout)])
-        return logging.getLogger(__name__)
-
     def _setup_menu_bar_callbacks(self):
         """Setup callbacks for the enhanced menu bar manager."""
         self.menu_bar_manager.set_recording_callback(self._handle_recording_action)
@@ -341,10 +361,56 @@ class DictoApp(rumps.App):
         self.menu_bar_manager.set_quit_callback(self._handle_quit_action)
 
     def _setup_enhanced_menu(self):
-        """Setup enhanced menu with menu bar manager integration."""
-        # Create context menu items
-        menu_items = self.menu_bar_manager.create_context_menu()
-        self.menu = menu_items
+        """Setup an enhanced, multi-level menu bar."""
+        menu_structure = {
+            "Record": {
+                "Start Recording": "record",
+                "Stop Recording": "stop",
+                "Cancel Recording": "cancel"
+            },
+            "Transcribe": {
+                "Transcribe File": "transcribe_file",
+                "Paste Last": "paste_last"
+            },
+            "History": {
+                "Clear History": "clear_history",
+                "View History": "view_history"
+            },
+            "Settings": {
+                "Preferences...": "show",
+                "---": None,
+                "Audio Settings": "audio",
+                "Transcription Settings": "transcription",
+                "---": None,
+                "Manage Profiles": "profiles",
+                "Configure Hotkeys": "hotkeys",
+                "---": None,
+                "Advanced Settings": "advanced",
+                "---": None,
+                "Export Settings...": "export",
+                "Import Settings...": "import"
+            },
+            "Debug": {
+                "View Logs": "view_logs",
+                "---": None,
+                "Debug Mode": "debug_mode",
+                "Run Self-Tests": "run_tests",
+                "Generate Diagnostic Report": "generate_report",
+                "Check System Health": "check_health"
+            },
+            "Help": {
+                "Check for Updates...": "check_updates",
+                "Documentation": "documentation",
+                "Report Issue": "report_issue"
+            },
+            "About": {
+                "About Dicto": "about_dicto"
+            },
+            "Quit": {
+                "Quit Dicto": "quit_dicto"
+            }
+        }
+        self.menu_bar_manager.create_menu_from_structure(menu_structure)
         
         # Update initial status
         self.menu_bar_manager.update_status(AppStatus.IDLE)
@@ -412,10 +478,186 @@ class DictoApp(rumps.App):
         """Handle settings-related menu actions."""
         if action == 'show':
             self.logger.info("Enhanced Menu: Settings")
-            self.notification_manager.show_notification("⚙️ Settings", "Basic settings panel (not yet implemented)", timeout=5)
+            self._show_preferences_gui()
         elif action == 'advanced':
             self.logger.info("Enhanced Menu: Advanced Settings")
-            self.notification_manager.show_notification("🔧 Advanced Settings", "Advanced settings panel (not yet implemented)", timeout=5)
+            self._show_preferences_gui(tab="advanced")
+        elif action == 'profiles':
+            self.logger.info("Enhanced Menu: Manage Profiles")
+            self._show_preferences_gui(tab="profiles")
+        elif action == 'hotkeys':
+            self.logger.info("Enhanced Menu: Configure Hotkeys")
+            self._show_preferences_gui(tab="hotkeys")
+        elif action == 'audio':
+            self.logger.info("Enhanced Menu: Audio Settings")
+            self._show_preferences_gui(tab="audio")
+        elif action == 'transcription':
+            self.logger.info("Enhanced Menu: Transcription Settings")
+            self._show_preferences_gui(tab="transcription")
+        elif action == 'export':
+            self.logger.info("Enhanced Menu: Export Settings")
+            self._export_settings()
+        elif action == 'import':
+            self.logger.info("Enhanced Menu: Import Settings")
+            self._import_settings()
+    
+    def _export_settings(self):
+        """Export settings to file."""
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            
+            # Create hidden root window for file dialog
+            root = tk.Tk()
+            root.withdraw()
+            
+            # Ask for export location
+            file_path = filedialog.asksaveasfilename(
+                title="Export Dicto Settings",
+                defaultextension=".json",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                initialfilename=f"dicto_settings_{int(time.time())}.json"
+            )
+            
+            root.destroy()
+            
+            if file_path:
+                if self.config_manager.export_settings(file_path):
+                    self.notification_manager.show_notification(
+                        "✅ Settings Exported",
+                        f"Settings exported successfully to:\n{file_path}",
+                        timeout=5
+                    )
+                    self.logger.info(f"Settings exported to: {file_path}")
+                else:
+                    self.notification_manager.show_notification(
+                        "❌ Export Failed",
+                        "Failed to export settings. Check logs for details.",
+                        timeout=5
+                    )
+            
+        except ImportError:
+            self.notification_manager.show_notification(
+                "⚠️ Export Unavailable",
+                "GUI file dialogs not available. Use command line export.",
+                timeout=5
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to export settings: {e}")
+            self.notification_manager.show_notification(
+                "❌ Export Error",
+                f"Export failed: {e}",
+                timeout=5
+            )
+    
+    def _import_settings(self):
+        """Import settings from file."""
+        try:
+            import tkinter as tk
+            from tkinter import filedialog, messagebox
+            
+            # Create hidden root window for file dialog
+            root = tk.Tk()
+            root.withdraw()
+            
+            # Ask for import file
+            file_path = filedialog.askopenfilename(
+                title="Import Dicto Settings",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+            )
+            
+            if file_path:
+                # Confirm import action
+                confirm = messagebox.askyesno(
+                    "Confirm Import",
+                    "This will merge imported settings with current settings.\n\nContinue with import?"
+                )
+                
+                root.destroy()
+                
+                if confirm:
+                    if self.config_manager.import_settings(file_path):
+                        # Reload current settings
+                        self.current_settings = self.config_manager.get_current_settings()
+                        
+                        self.notification_manager.show_notification(
+                            "✅ Settings Imported",
+                            f"Settings imported successfully from:\n{file_path}",
+                            timeout=5
+                        )
+                        self.logger.info(f"Settings imported from: {file_path}")
+                    else:
+                        self.notification_manager.show_notification(
+                            "❌ Import Failed",
+                            "Failed to import settings. Check logs for details.",
+                            timeout=5
+                        )
+            else:
+                root.destroy()
+            
+        except ImportError:
+            self.notification_manager.show_notification(
+                "⚠️ Import Unavailable",
+                "GUI file dialogs not available. Use command line import.",
+                timeout=5
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to import settings: {e}")
+            self.notification_manager.show_notification(
+                "❌ Import Error",
+                f"Import failed: {e}",
+                timeout=5
+            )
+    
+    def _show_preferences_gui(self, tab: str = "general"):
+        """Show the preferences GUI."""
+        try:
+            # Import here to avoid circular import and only when needed
+            from preferences_gui import PreferencesGUI
+            
+            self.logger.info(f"Opening preferences GUI - {tab} tab")
+            
+            # Create and show preferences window
+            preferences_gui = PreferencesGUI(self.config_manager)
+            
+            # Switch to requested tab
+            tab_mapping = {
+                "general": 0,
+                "audio": 1,
+                "transcription": 2,
+                "hotkeys": 3,
+                "profiles": 4,
+                "advanced": 5
+            }
+            
+            if tab in tab_mapping:
+                preferences_gui.notebook.select(tab_mapping[tab])
+            
+            # Show the preferences window
+            preferences_gui.show()
+            
+            # Reload settings after preferences window closes
+            self.current_settings = self.config_manager.get_current_settings()
+            self.logger.info("Settings reloaded after preferences update")
+            
+        except ImportError as e:
+            self.logger.error(f"Failed to import preferences_gui: {e}")
+            self.notification_manager.show_notification(
+                "⚠️ Settings Error", 
+                "Preferences GUI not available. Using basic settings notification.",
+                timeout=5
+            )
+            # Fallback to basic notification
+            current_profile = self.current_settings.get('profile_name', 'default')
+            settings_text = f"Current Profile: {current_profile}\nUse configuration files for advanced settings."
+            self.notification_manager.show_notification("⚙️ Current Settings", settings_text, timeout=8)
+        except Exception as e:
+            self.logger.error(f"Failed to show preferences GUI: {e}")
+            self.notification_manager.show_notification(
+                "⚠️ Settings Error", 
+                f"Failed to open preferences: {e}",
+                timeout=5
+            )
 
     def _handle_shortcuts_action(self, action: str):
         """Handle keyboard shortcuts menu actions."""
@@ -442,18 +684,30 @@ class DictoApp(rumps.App):
             self.notification_manager.show_notification("📊 Status Info", status_text, timeout=8)
 
     def _handle_debug_action(self, action: str):
-        """Handle debug-related menu actions."""
-        if action == 'show':
-            self.logger.info("Enhanced Menu: Debug Info")
-            debug_text = (f"🔍 Debug Info:\n"
-                         f"• Whisper binary: {self.whisper_binary_path}\n"
-                         f"• Model: {self.model_path}\n"
-                         f"• Recording: {self.is_recording}\n"
-                         f"• Session active: {self.recording_session_active}")
-            self.notification_manager.show_notification("🔍 Debug Info", debug_text, timeout=10)
+        self.logger.debug(f"Handling debug action: {action}")
+        if action == "view_logs":
+            os.system(f"open '{self.error_handler.log_dir}'")
+        elif action == "debug_mode":
+            # This would likely toggle a more verbose logging level
+            pass
+        elif action == "run_tests":
+            # Placeholder for running integrated self-tests
+            self.notification_manager.show_notification("Self-Test", "All tests passed (placeholder).")
+        elif action == "generate_report":
+            report_path = self.error_handler.generate_diagnostic_report()
+            self.notification_manager.show_notification(
+                "Diagnostics", 
+                f"Diagnostic report saved to:\n{report_path}"
+            )
+            os.system(f"open '{report_path}'")
+        elif action == "check_health":
+            health_status = self.error_handler.check_system_health()
+            # Format this nicely for a notification or a small window
+            status_str = "\n".join([f"• {k}: {v}" for k, v in health_status.items()])
+            self.notification_manager.show_notification("System Health", status_str)
 
     def _handle_help_action(self, action: str):
-        """Handle help-related menu actions."""
+        self.logger.debug(f"Handling help action: {action}")
         if action == 'show':
             self.logger.info("Enhanced Menu: Help")
             help_text = ("❓ Dicto Help:\n"
@@ -705,7 +959,7 @@ class DictoApp(rumps.App):
 
 def main():
     logging.basicConfig(level=logging.INFO,
-                        format='%(asctime)s - %(levelname)s - %(message)s')
+                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     logger = logging.getLogger("DictoMain")
 
     whisper_binary = os.path.join(os.path.dirname(__file__), "whisper.cpp/build/bin/whisper-cli")

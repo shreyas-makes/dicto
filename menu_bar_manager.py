@@ -68,12 +68,13 @@ class MenuBarManager:
     with animated status updates and keyboard shortcut management.
     """
     
-    def __init__(self, app_name: str = "Dicto"):
+    def __init__(self, app_name: str = "Dicto", rumps_app: Optional[rumps.App] = None):
         """
         Initialize MenuBarManager.
         
         Args:
             app_name: Application name for menu bar display.
+            rumps_app: Optional existing rumps.App instance to use.
         """
         self.app_name = app_name
         self.logger = logging.getLogger(__name__ + ".MenuBarManager")
@@ -94,7 +95,45 @@ class MenuBarManager:
         # Quick settings
         self.settings_panel_visible = False
         
+        # Callback handlers (initialized to None)
+        self.recording_callback: Optional[Callable] = None
+        self.transcription_callback: Optional[Callable] = None
+        self.history_callback: Optional[Callable] = None
+        self.settings_callback: Optional[Callable] = None
+        self.shortcuts_callback: Optional[Callable] = None
+        self.status_callback: Optional[Callable] = None
+        self.debug_callback: Optional[Callable] = None
+        self.help_callback: Optional[Callable] = None
+        self.about_callback: Optional[Callable] = None
+        self.quit_callback: Optional[Callable] = None
+        
+        # Initialize rumps app (create new or use existing)
+        if rumps_app:
+            self.app = rumps_app
+            self.logger.info("Using existing rumps app")
+        else:
+            self._create_app()
+        
         self.logger.info("MenuBarManager initialized")
+    
+    def _create_app(self):
+        """Create the rumps app for menu bar integration."""
+        try:
+            # Create rumps app
+            self.app = rumps.App(
+                name=self.app_name,
+                icon=None,
+                quit_button=None  # Custom quit handling
+            )
+            
+            # Set initial status
+            self.update_status(AppStatus.IDLE)
+            
+            self.logger.info("Rumps app created successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create rumps app: {e}")
+            raise
     
     def create_status_icon(self, initial_status: AppStatus = AppStatus.IDLE) -> rumps.App:
         """
@@ -472,16 +511,134 @@ class MenuBarManager:
         self.quit_callback = callback
     
     def cleanup(self):
-        """Clean up resources and stop animations."""
+        """Cleanup menu bar manager resources."""
         try:
+            # Stop any running animations
             self._stop_status_animation()
+            
+            # Clear callbacks
+            self.status_callbacks.clear()
+            
             self.logger.info("MenuBarManager cleanup completed")
+            
         except Exception as e:
-            self.logger.error(f"Error during cleanup: {e}")
+            self.logger.error(f"MenuBarManager cleanup failed: {e}")
+
+    def create_menu_from_structure(self, menu_structure: Dict[str, Dict[str, str]]):
+        """
+        Create menu items from a structured dictionary.
+        
+        Args:
+            menu_structure: Nested dictionary defining menu structure.
+                           Format: {"Section": {"Item Name": "action_id"}}
+        """
+        try:
+            if not hasattr(self, 'app'):
+                self.logger.error("Cannot create menu: app not initialized")
+                return
+            
+            for section_name, items in menu_structure.items():
+                # Create section separator if this isn't the first section
+                if len(self.menu_items) > 0:
+                    separator = rumps.separator
+                    self.app.menu.add(separator)
+                
+                # Add section items
+                for item_name, action_id in items.items():
+                    menu_item = rumps.MenuItem(item_name)
+                    
+                    # Set callback based on action_id pattern
+                    menu_item.callback = self._create_menu_callback(action_id)
+                    
+                    self.app.menu.add(menu_item)
+                    self.menu_items[item_name] = menu_item
+            
+            self.logger.info(f"Created menu structure with {len(self.menu_items)} items")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create menu from structure: {e}")
+
+    def _create_menu_callback(self, action_id: str):
+        """Create a callback function for the given action_id."""
+        def callback(sender):
+            try:
+                # Handle callbacks based on action_id pattern
+                if action_id.startswith('record_'):
+                    action = action_id.replace('record_', '')
+                    if self.recording_callback:
+                        self.recording_callback(action)
+                elif action_id.startswith('transcribe_'):
+                    action = action_id.replace('transcribe_', '')
+                    if self.transcription_callback:
+                        self.transcription_callback(action)
+                elif action_id.startswith('history_'):
+                    action = action_id.replace('history_', '')
+                    if self.history_callback:
+                        self.history_callback(action)
+                elif action_id.startswith('settings_'):
+                    action = action_id.replace('settings_', '')
+                    if self.settings_callback:
+                        self.settings_callback(action)
+                elif action_id.startswith('shortcuts_'):
+                    action = action_id.replace('shortcuts_', '')
+                    if self.shortcuts_callback:
+                        self.shortcuts_callback(action)
+                elif action_id.startswith('status_'):
+                    action = action_id.replace('status_', '')
+                    if self.status_callback:
+                        self.status_callback(action)
+                elif action_id.startswith('debug_'):
+                    action = action_id.replace('debug_', '')
+                    if self.debug_callback:
+                        self.debug_callback(action)
+                elif action_id.startswith('help_'):
+                    action = action_id.replace('help_', '')
+                    if self.help_callback:
+                        self.help_callback(action)
+                elif action_id.startswith('about_'):
+                    action = action_id.replace('about_', '')
+                    if self.about_callback:
+                        self.about_callback(action)
+                elif action_id == 'quit_dicto':
+                    if self.quit_callback:
+                        self.quit_callback()
+                else:
+                    # Generic callback
+                    self.logger.info(f"Generic menu action: {action_id}")
+            except Exception as e:
+                self.logger.error(f"Menu callback error for {action_id}: {e}")
+        
+        return callback
     
     def __del__(self):
         """Cleanup when object is destroyed."""
         try:
             self.cleanup()
         except:
-            pass 
+            pass
+
+    def run(self):
+        """Run the menu bar application."""
+        try:
+            if hasattr(self, 'app') and self.app:
+                self.logger.info("Starting MenuBar application...")
+                self.app.run()
+            else:
+                self.logger.error("Cannot run: app not initialized")
+        except Exception as e:
+            self.logger.error(f"Failed to run MenuBar app: {e}")
+            raise
+    
+    def quit(self):
+        """Quit the menu bar application."""
+        try:
+            if hasattr(self, 'app') and self.app:
+                self.app.quit()
+                self.logger.info("MenuBar application quit")
+        except Exception as e:
+            self.logger.error(f"Error quitting MenuBar app: {e}")
+
+    def set_rumps_app(self, rumps_app: rumps.App):
+        """Set an existing rumps app to work with."""
+        self.app = rumps_app
+        self.logger.info("Rumps app set successfully") 
