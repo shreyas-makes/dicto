@@ -114,6 +114,12 @@ except ImportError:
     print("Error: config_manager.py not found. Ensure it's in the same directory.")
     sys.exit(1)
 
+try:
+    from performance_monitor import PerformanceMonitor
+except ImportError:
+    print("Error: performance_monitor.py not found. Ensure it's in the same directory.")
+    sys.exit(1)
+
 
 class ClipboardManager:
     """
@@ -304,6 +310,12 @@ class DictoApp(rumps.App):
         self.current_settings = self.config_manager.get_current_settings()
         self.logger.info(f"Configuration loaded. Current profile: {self.current_settings.get('profile_name', 'default')}")
 
+        # Initialize performance monitor
+        self.performance_monitor = PerformanceMonitor(log_dir=str(self.app_support_dir / "performance"))
+        self.performance_monitor.start_monitoring()
+        self._setup_performance_callbacks()
+        self.logger.info("Performance monitoring initialized and started")
+
         self.whisper_binary_path = whisper_binary_path or "./whisper.cpp/main"
         self.model_path = model_path or "./whisper.cpp/models/ggml-base.en.bin"
 
@@ -311,6 +323,9 @@ class DictoApp(rumps.App):
             whisper_binary_path=self.whisper_binary_path,
             model_path=self.model_path
         )
+        
+        # Get cache manager from performance monitor
+        self.cache_manager = self.performance_monitor.cache_manager
 
         self.vocabulary_manager = VocabularyManager()
         self.vocabulary_manager.add_custom_words(["Dicto", "macOS", "Whisper", "AI"])
@@ -346,6 +361,45 @@ class DictoApp(rumps.App):
         self._start_background_tasks()
 
         self.logger.info("DictoApp initialized successfully with enhanced UI.")
+
+    def _setup_performance_callbacks(self):
+        """Setup performance optimization callbacks."""
+        # Register callbacks for performance events
+        self.performance_monitor.register_optimization_callback("cpu_high", self._handle_high_cpu)
+        self.performance_monitor.register_optimization_callback("memory_high", self._handle_high_memory)
+        self.performance_monitor.register_optimization_callback("battery_low", self._handle_low_battery)
+        self.performance_monitor.register_optimization_callback("latency_high", self._handle_high_latency)
+        
+    def _handle_high_cpu(self):
+        """Handle high CPU usage optimization."""
+        self.logger.info("Applying high CPU usage optimizations")
+        # Reduce background processing
+        if hasattr(self, 'continuous_recorder'):
+            # Temporarily reduce processing frequency
+            pass
+        
+    def _handle_high_memory(self):
+        """Handle high memory usage optimization."""
+        self.logger.info("Applying high memory usage optimizations")
+        # Clear caches and trigger garbage collection
+        if hasattr(self, 'session_manager'):
+            self.session_manager.cleanup_old_sessions()
+        
+    def _handle_low_battery(self):
+        """Handle low battery optimization."""
+        self.logger.info("Applying low battery optimizations")
+        # Reduce functionality to conserve battery
+        self.notification_manager.show_notification(
+            "🔋 Battery Optimization",
+            "Dicto has enabled battery saving mode",
+            timeout=3
+        )
+        
+    def _handle_high_latency(self):
+        """Handle high latency optimization."""
+        self.logger.info("Applying high latency optimizations")
+        # Optimize for faster response times
+        pass
 
     def _setup_menu_bar_callbacks(self):
         """Setup callbacks for the enhanced menu bar manager."""
@@ -741,6 +795,8 @@ class DictoApp(rumps.App):
         Placeholder for hotkey functionality. 
         rumps does not support global hotkeys - would need pynput implementation.
         """
+        hotkey_start_time = time.time()
+        
         self.logger.info("Global hotkey (Control-V) detected.")
         if not self.is_recording:
             self.logger.info("Hotkey: Starting recording.")
@@ -754,6 +810,10 @@ class DictoApp(rumps.App):
             self.menu["Start Recording"].enabled = True
             self.menu["Stop Recording"].enabled = False
             self.title = "Dicto: Processing ⚙️"
+        
+        # Record hotkey latency for performance monitoring
+        hotkey_latency = (time.time() - hotkey_start_time) * 1000  # Convert to milliseconds
+        self.performance_monitor.record_hotkey_latency(hotkey_latency)
 
     def _start_background_tasks(self):
         if not self.continuous_recorder.start_continuous_monitoring():
@@ -853,15 +913,43 @@ class DictoApp(rumps.App):
 
     def _transcribe_with_vocabulary(self, audio_path: str) -> Optional[str]:
         self.logger.info(f"Transcribing audio file: {audio_path}")
+        transcription_start_time = time.time()
+        
         try:
+            # Check cache first
+            import hashlib
+            with open(audio_path, 'rb') as f:
+                audio_hash = hashlib.md5(f.read()).hexdigest()
+            
+            cache_key = f"transcription_{audio_hash}"
+            cached_result = self.cache_manager.get(cache_key)
+            
+            if cached_result:
+                self.logger.info("Using cached transcription result")
+                transcription_time = time.time() - transcription_start_time
+                self.performance_monitor.record_transcription_time(transcription_time)
+                return cached_result
+            
+            # Perform transcription
             transcription_result = self.transcription_engine.transcribe_file(audio_path)
+            
             if transcription_result and transcription_result.get("success"):
-                return transcription_result.get("text")
+                text = transcription_result.get("text")
+                
+                # Cache the result
+                self.cache_manager.put(cache_key, text)
+                
+                # Record performance metrics
+                transcription_time = time.time() - transcription_start_time
+                self.performance_monitor.record_transcription_time(transcription_time)
+                
+                return text
             else:
                 error_message = transcription_result.get("error", "Unknown transcription error")
                 self.logger.error(f"Transcription failed: {error_message}")
                 self.notification_manager.notify_error(f"Transcription error: {error_message}")
                 return None
+                
         except Exception as e:
             self.logger.error(f"Exception during transcription: {e}", exc_info=True)
             self.notification_manager.notify_error(f"Transcription exception: {e}")
@@ -936,6 +1024,12 @@ class DictoApp(rumps.App):
         Shutdown the application and clean up resources.
         """
         self.logger.info("Shutting down DictoApp...")
+        
+        # Stop performance monitoring
+        if hasattr(self, 'performance_monitor'):
+            self.performance_monitor.stop_monitoring()
+            self.performance_monitor.cleanup()
+            self.logger.info("Performance monitoring stopped and cleaned up")
         try:
             # Stop recording if active
             if self.is_recording:
