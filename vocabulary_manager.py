@@ -195,6 +195,27 @@ class VocabularyManager:
         
         return added_count
     
+    def add_proper_nouns(self, nouns: List[str]) -> int:
+        """
+        Add multiple proper nouns to the vocabulary.
+        
+        Args:
+            nouns: List of proper nouns to add.
+            
+        Returns:
+            int: Number of proper nouns actually added (excluding duplicates).
+        """
+        added_count = 0
+        for noun in nouns:
+            if self._add_proper_noun(noun):
+                added_count += 1
+        
+        if added_count > 0:
+            self._save_vocabulary()
+            self.logger.info(f"Added {added_count} new proper nouns")
+        
+        return added_count
+    
     def _add_custom_word(self, word: str) -> bool:
         """
         Add a single custom word.
@@ -441,18 +462,46 @@ class VocabularyManager:
             self.logger.error(f"Failed to clear vocabulary: {e}")
             return False
     
-    def export_vocabulary(self, file_path: str, format_type: str = "json") -> bool:
+    def save_vocabulary_to_file(self, file_path: str) -> bool:
         """
-        Export vocabulary to a file.
+        Save vocabulary to a JSON file.
         
         Args:
-            file_path: Output file path.
+            file_path: Path where to save the vocabulary file.
+            
+        Returns:
+            bool: True if saved successfully, False otherwise.
+        """
+        return self.export_vocabulary(file_path, format_type="json")
+    
+    def load_vocabulary_from_file(self, file_path: str) -> bool:
+        """
+        Load vocabulary from a file (alias for load_custom_vocabulary).
+        
+        Args:
+            file_path: Path to the vocabulary file.
+            
+        Returns:
+            bool: True if loaded successfully, False otherwise.
+        """
+        return self.load_custom_vocabulary(file_path)
+    
+    def export_vocabulary(self, file_path: str = None, format_type: str = "json"):
+        """
+        Export vocabulary to a file or return as data.
+        
+        Args:
+            file_path: Output file path. If None, returns data instead of saving.
             format_type: Export format ("json", "csv", "text").
             
         Returns:
-            bool: True if exported successfully.
+            bool or dict: True if exported successfully to file, or dict of data if no file_path.
         """
         try:
+            # If no file path provided, return the data
+            if file_path is None:
+                return self.get_all_vocabulary()
+            
             export_path = Path(file_path)
             
             if format_type.lower() == "json":

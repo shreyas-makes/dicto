@@ -225,6 +225,7 @@ class AudioRecorder:
             "-c", "1",      # Mono
             "-b", "16",     # 16-bit depth
             str(self.current_file)
+            # Note: Removed norm and gain parameters as they cause recording to hang
         ]
         
         # Add duration if specified

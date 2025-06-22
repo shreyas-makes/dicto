@@ -1,0 +1,39 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Dicto Hotkey Specification
+
+## Primary Hotkey: CTRL+V (Not CMD+V)
+
+The Dicto application MUST use **CTRL+V** as the global hotkey combination for voice recording, not CMD+V.
+
+### Key Implementation Files:
+- [continuous_recorder.py](mdc:continuous_recorder.py) - Main hotkey detection logic
+- [dicto_main.py](mdc:dicto_main.py) - Fallback hotkey manager 
+
+### Requirements:
+1. **CTRL+V Combination**: Use `Key.ctrl_l` or `Key.ctrl_r` + 'v' key
+2. **Cross-Platform**: CTRL works on both macOS and other platforms
+3. **Hold Behavior**: Continuous recording while CTRL+V is held down
+4. **Release Behavior**: Stop recording when either key is released
+
+### Implementation Details:
+- Use `pynput.keyboard.Key.ctrl_l` and `Key.ctrl_r` for control keys
+- Track both left and right CTRL keys for reliability
+- Variable name: Use `ctrl_pressed` not `cmd_pressed`
+- Log messages should reference "CTRL+V" not "CMD+V"
+
+### Code Pattern:
+```python
+if key == Key.ctrl_l or key == Key.ctrl_r:
+    self.ctrl_pressed = True
+elif hasattr(key, 'char') and key.char and key.char.lower() == 'v':
+    self.v_pressed = True
+
+if self.ctrl_pressed and self.v_pressed:
+    # Start recording
+```
+
+This ensures consistent CTRL+V behavior across all platforms and matches user expectations.

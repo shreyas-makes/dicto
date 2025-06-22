@@ -13,7 +13,7 @@ AppKit==0.2.8
 
 # Dicto - System-wide voice transcription dependencies
 
-# Global hotkey support
+# Global hotkey support (using pynput for reliable cross-platform detection)
 pynput>=1.7.6
 
 # Cross-platform notifications
@@ -21,6 +21,7 @@ plyer>=2.1.0
 
 # macOS system integration (clipboard, notifications)
 pyobjc-framework-Cocoa>=9.0
+pyobjc-framework-Quartz>=9.0
 
 # Optional: Enhanced logging and debugging
 rich>=13.0.0 
@@ -39,4 +40,7 @@ sounddevice>=0.4.6
 # JSON parsing for device enumeration (built-in to Python 3.7+)
 # mimetypes for file type detection (built-in)
 # queue for thread-safe audio level monitoring (built-in)
-# threading for background audio processing (built-in) 
+# threading for background audio processing (built-in)
+
+# macOS menu bar app framework
+rumps>=0.3.0 
