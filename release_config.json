@@ -1,0 +1,64 @@
+{
+  "app_name": "Dicto",
+  "bundle_id": "com.dicto.transcription",
+  "version": "1.0.0",
+  "developer_id": null,
+  "team_id": null,
+  "notarization_apple_id": null,
+  "notarization_password": null,
+  "signing_enabled": false,
+  "notarization_enabled": false,
+  "icon_path": "assets/icon.icns",
+  "categories": ["Productivity", "Utilities"],
+  "requirements": {
+    "minimum_os": "10.15",
+    "python_version": "3.8",
+    "memory_mb": 4096,
+    "disk_space_mb": 2048
+  },
+  "distribution": {
+    "github_releases": true,
+    "direct_download": true,
+    "mac_app_store": false,
+    "homebrew_cask": true
+  },
+  "dmg_settings": {
+    "background_image": null,
+    "window_size": [600, 400],
+    "icon_size": 128,
+    "app_position": [150, 200],
+    "applications_position": [450, 200]
+  },
+  "packaging": {
+    "include_python": true,
+    "include_dependencies": true,
+    "strip_debug": true,
+    "compress": true,
+    "code_signing": {
+      "entitlements": [
+        "com.apple.security.microphone",
+        "com.apple.security.accessibility",
+        "com.apple.security.cs.allow-jit",
+        "com.apple.security.cs.allow-unsigned-executable-memory"
+      ]
+    }
+  },
+  "quality_assurance": {
+    "run_tests": true,
+    "performance_benchmarks": true,
+    "security_scan": true,
+    "compatibility_check": true
+  },
+  "release_notes": {
+    "template": "Release {version} - {date}",
+    "include_changelog": true,
+    "include_system_requirements": true,
+    "include_known_issues": true
+  },
+  "support": {
+    "contact_email": "support@dicto.app",
+    "documentation_url": "https://dicto.app/docs",
+    "community_url": "https://dicto.app/community",
+    "issue_tracker": "https://github.com/dicto/dicto/issues"
+  }
+} 
