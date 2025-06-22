@@ -54,7 +54,9 @@ A simple, offline AI transcription app for macOS that uses OpenAI's Whisper (via
 3. **Stop & Transcribe**: Press `Cmd+V` again to stop and transcribe
 4. **Get Results**: Transcription is automatically copied to your clipboard
 5. **Paste Anywhere**: Use `Cmd+V` in any app to paste the transcription
-6. **Quit**: Press `Cmd+Q` to exit the app
+6. **Access Preferences**: Click the Dicto icon in the menu bar and select "⚙️ Settings" to configure options
+7. **View History**: Access recent transcriptions through the menu bar → "📝 Transcription History"
+8. **Quit**: Press `Cmd+Q` to exit the app
 
 ## 🔧 Technical Details
 

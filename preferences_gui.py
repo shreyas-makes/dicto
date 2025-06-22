@@ -14,8 +14,9 @@ import json
 
 try:
     from config_manager import ConfigManager, AudioSettings, TranscriptionSettings, UISettings, AdvancedSettings
+    from vocabulary_manager import VocabularyManager
 except ImportError:
-    print("Error: config_manager.py not found. Ensure it's in the same directory.")
+    print("Error: config_manager.py or vocabulary_manager.py not found. Ensure they're in the same directory.")
     exit(1)
 
 
@@ -55,6 +56,14 @@ class PreferencesGUI:
         self.form_vars = {}
         self.hotkey_entries = {}
         
+        # Initialize vocabulary manager
+        self.vocabulary_manager = VocabularyManager()
+        
+        # Vocabulary UI components
+        self.vocabulary_listbox = None
+        self.proper_nouns_listbox = None
+        self.current_domain = tk.StringVar(value="general")
+        
         # Create interface
         self._create_interface()
         
@@ -73,6 +82,7 @@ class PreferencesGUI:
         self._create_general_tab()
         self._create_audio_tab()
         self._create_transcription_tab()
+        self._create_vocabulary_tab()
         self._create_hotkeys_tab()
         self._create_profiles_tab()
         self._create_advanced_tab()
@@ -221,6 +231,129 @@ class PreferencesGUI:
                        variable=self.form_vars['speaker_diarization']).grid(row=6, column=0, columnspan=2, sticky='w', pady=2)
         
         trans_frame.columnconfigure(1, weight=1)
+    
+    def _create_vocabulary_tab(self):
+        """Create vocabulary management tab."""
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="Vocabulary")
+        
+        # Main container with paned window for left/right layout
+        paned = ttk.PanedWindow(frame, orient='horizontal')
+        paned.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        # Left panel - Vocabulary Lists
+        left_frame = ttk.Frame(paned)
+        paned.add(left_frame, weight=2)
+        
+        # Current Vocabulary section
+        vocab_frame = ttk.LabelFrame(left_frame, text="Current Vocabulary", padding=10)
+        vocab_frame.pack(fill='both', expand=True, pady=(0, 5))
+        
+        # Tabs for different vocabulary types
+        vocab_notebook = ttk.Notebook(vocab_frame)
+        vocab_notebook.pack(fill='both', expand=True)
+        
+        # Custom Words tab
+        words_frame = ttk.Frame(vocab_notebook)
+        vocab_notebook.add(words_frame, text="Custom Words")
+        
+        # Words listbox with scrollbar
+        words_scroll_frame = ttk.Frame(words_frame)
+        words_scroll_frame.pack(fill='both', expand=True)
+        
+        words_scrollbar = ttk.Scrollbar(words_scroll_frame)
+        words_scrollbar.pack(side='right', fill='y')
+        
+        self.vocabulary_listbox = tk.Listbox(words_scroll_frame, yscrollcommand=words_scrollbar.set, selectmode='extended')
+        self.vocabulary_listbox.pack(side='left', fill='both', expand=True)
+        words_scrollbar.config(command=self.vocabulary_listbox.yview)
+        
+        # Words buttons
+        words_btn_frame = ttk.Frame(words_frame)
+        words_btn_frame.pack(fill='x', pady=(5, 0))
+        
+        ttk.Button(words_btn_frame, text="Remove Selected", command=self._remove_selected_words).pack(side='left', padx=(0, 5))
+        ttk.Button(words_btn_frame, text="Clear All", command=self._clear_words).pack(side='left')
+        
+        # Proper Nouns tab
+        nouns_frame = ttk.Frame(vocab_notebook)
+        vocab_notebook.add(nouns_frame, text="Proper Nouns")
+        
+        # Nouns listbox with scrollbar
+        nouns_scroll_frame = ttk.Frame(nouns_frame)
+        nouns_scroll_frame.pack(fill='both', expand=True)
+        
+        nouns_scrollbar = ttk.Scrollbar(nouns_scroll_frame)
+        nouns_scrollbar.pack(side='right', fill='y')
+        
+        self.proper_nouns_listbox = tk.Listbox(nouns_scroll_frame, yscrollcommand=nouns_scrollbar.set, selectmode='extended')
+        self.proper_nouns_listbox.pack(side='left', fill='both', expand=True)
+        nouns_scrollbar.config(command=self.proper_nouns_listbox.yview)
+        
+        # Nouns buttons
+        nouns_btn_frame = ttk.Frame(nouns_frame)
+        nouns_btn_frame.pack(fill='x', pady=(5, 0))
+        
+        ttk.Button(nouns_btn_frame, text="Remove Selected", command=self._remove_selected_nouns).pack(side='left', padx=(0, 5))
+        ttk.Button(nouns_btn_frame, text="Clear All", command=self._clear_nouns).pack(side='left')
+        
+        # Right panel - Management Controls
+        right_frame = ttk.Frame(paned)
+        paned.add(right_frame, weight=1)
+        
+        # Add Words section
+        add_frame = ttk.LabelFrame(right_frame, text="Add Words", padding=10)
+        add_frame.pack(fill='x', pady=(0, 10))
+        
+        # Add individual word
+        ttk.Label(add_frame, text="Add Word:").pack(anchor='w')
+        self.word_entry = ttk.Entry(add_frame)
+        self.word_entry.pack(fill='x', pady=(2, 5))
+        self.word_entry.bind('<Return>', lambda e: self._add_single_word())
+        
+        word_type_frame = ttk.Frame(add_frame)
+        word_type_frame.pack(fill='x', pady=(0, 5))
+        
+        self.word_type_var = tk.StringVar(value="word")
+        ttk.Radiobutton(word_type_frame, text="Regular Word", variable=self.word_type_var, value="word").pack(side='left')
+        ttk.Radiobutton(word_type_frame, text="Proper Noun", variable=self.word_type_var, value="proper_noun").pack(side='left', padx=(10, 0))
+        
+        ttk.Button(add_frame, text="Add Word", command=self._add_single_word).pack(fill='x')
+        
+        # Add multiple words
+        ttk.Label(add_frame, text="Add Multiple (one per line):").pack(anchor='w', pady=(10, 2))
+        self.words_text = tk.Text(add_frame, height=4, wrap='word')
+        self.words_text.pack(fill='x', pady=(0, 5))
+        
+        ttk.Button(add_frame, text="Add Multiple Words", command=self._add_multiple_words).pack(fill='x')
+        
+        # File Operations section
+        file_frame = ttk.LabelFrame(right_frame, text="File Operations", padding=10)
+        file_frame.pack(fill='x', pady=(0, 10))
+        
+        ttk.Button(file_frame, text="Load from File...", command=self._load_vocabulary_file).pack(fill='x', pady=(0, 5))
+        ttk.Button(file_frame, text="Export Vocabulary...", command=self._export_vocabulary_file).pack(fill='x', pady=(0, 5))
+        
+        # Domain Management section
+        domain_frame = ttk.LabelFrame(right_frame, text="Domain Categories", padding=10)
+        domain_frame.pack(fill='x', pady=(0, 10))
+        
+        ttk.Label(domain_frame, text="Domain:").pack(anchor='w')
+        domain_combo = ttk.Combobox(domain_frame, textvariable=self.current_domain, 
+                                   values=['general', 'medical', 'legal', 'technical', 'business'])
+        domain_combo.pack(fill='x', pady=(2, 5))
+        
+        ttk.Button(domain_frame, text="Create New Domain", command=self._create_new_domain).pack(fill='x', pady=(0, 5))
+        
+        # Statistics section
+        stats_frame = ttk.LabelFrame(right_frame, text="Statistics", padding=10)
+        stats_frame.pack(fill='x')
+        
+        self.stats_label = ttk.Label(stats_frame, text="Loading vocabulary...")
+        self.stats_label.pack(anchor='w')
+        
+        # Load current vocabulary
+        self._refresh_vocabulary_display()
     
     def _create_hotkeys_tab(self):
         """Create hotkeys configuration tab."""
@@ -381,6 +514,264 @@ class PreferencesGUI:
         ttk.Button(reset_frame, text="Reset All Settings", command=self._reset_all_settings).pack(side='left', padx=5)
         
         adv_frame.columnconfigure(1, weight=1)
+    
+    def _refresh_vocabulary_display(self):
+        """Refresh the vocabulary display lists."""
+        try:
+            # Clear existing lists
+            if self.vocabulary_listbox:
+                self.vocabulary_listbox.delete(0, tk.END)
+            if self.proper_nouns_listbox:
+                self.proper_nouns_listbox.delete(0, tk.END)
+            
+            # Get current vocabulary
+            vocab_data = self.vocabulary_manager.get_all_vocabulary()
+            
+            # Populate custom words
+            if self.vocabulary_listbox:
+                for word in sorted(vocab_data['custom_words']):
+                    self.vocabulary_listbox.insert(tk.END, word)
+            
+            # Populate proper nouns
+            if self.proper_nouns_listbox:
+                for noun in sorted(vocab_data['proper_nouns']):
+                    self.proper_nouns_listbox.insert(tk.END, noun)
+            
+            # Update statistics
+            if hasattr(self, 'stats_label'):
+                stats_text = f"Custom Words: {vocab_data['total_words']}\n"
+                stats_text += f"Proper Nouns: {vocab_data['total_proper_nouns']}\n"
+                stats_text += f"Domains: {len(vocab_data['domains'])}"
+                self.stats_label.config(text=stats_text)
+            
+        except Exception as e:
+            self.logger.error(f"Failed to refresh vocabulary display: {e}")
+            if hasattr(self, 'stats_label'):
+                self.stats_label.config(text="Error loading vocabulary")
+    
+    def _add_single_word(self):
+        """Add a single word from the entry field."""
+        word = self.word_entry.get().strip()
+        if not word:
+            return
+        
+        try:
+            word_type = self.word_type_var.get()
+            
+            if word_type == "proper_noun":
+                added = self.vocabulary_manager.add_proper_nouns([word])
+                if added > 0:
+                    messagebox.showinfo("Success", f"Added proper noun: {word}")
+                else:
+                    messagebox.showwarning("Duplicate", f"'{word}' already exists in proper nouns")
+            else:
+                added = self.vocabulary_manager.add_custom_words([word])
+                if added > 0:
+                    messagebox.showinfo("Success", f"Added word: {word}")
+                else:
+                    messagebox.showwarning("Duplicate", f"'{word}' already exists in vocabulary")
+            
+            # Clear entry and refresh display
+            self.word_entry.delete(0, tk.END)
+            self._refresh_vocabulary_display()
+            
+        except Exception as e:
+            self.logger.error(f"Failed to add word: {e}")
+            messagebox.showerror("Error", f"Failed to add word: {e}")
+    
+    def _add_multiple_words(self):
+        """Add multiple words from the text area."""
+        text_content = self.words_text.get("1.0", tk.END).strip()
+        if not text_content:
+            return
+        
+        try:
+            # Split by lines and clean
+            words = [line.strip() for line in text_content.split('\n') if line.strip()]
+            
+            if not words:
+                messagebox.showwarning("No Words", "No valid words found to add")
+                return
+            
+            word_type = self.word_type_var.get()
+            
+            if word_type == "proper_noun":
+                added = self.vocabulary_manager.add_proper_nouns(words)
+                messagebox.showinfo("Success", f"Added {added} proper nouns out of {len(words)} provided")
+            else:
+                added = self.vocabulary_manager.add_custom_words(words)
+                messagebox.showinfo("Success", f"Added {added} words out of {len(words)} provided")
+            
+            # Clear text area and refresh display
+            self.words_text.delete("1.0", tk.END)
+            self._refresh_vocabulary_display()
+            
+        except Exception as e:
+            self.logger.error(f"Failed to add multiple words: {e}")
+            messagebox.showerror("Error", f"Failed to add words: {e}")
+    
+    def _remove_selected_words(self):
+        """Remove selected words from custom vocabulary."""
+        if not self.vocabulary_listbox:
+            return
+        
+        selected_indices = self.vocabulary_listbox.curselection()
+        if not selected_indices:
+            messagebox.showwarning("No Selection", "Please select words to remove")
+            return
+        
+        try:
+            # Get selected words
+            selected_words = [self.vocabulary_listbox.get(i) for i in selected_indices]
+            
+            if messagebox.askyesno("Confirm Removal", f"Remove {len(selected_words)} selected words?"):
+                # Remove from vocabulary manager
+                for word in selected_words:
+                    self.vocabulary_manager.custom_words.discard(word)
+                
+                # Save changes
+                self.vocabulary_manager.save_vocabulary_preferences()
+                
+                # Refresh display
+                self._refresh_vocabulary_display()
+                
+                messagebox.showinfo("Success", f"Removed {len(selected_words)} words")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to remove words: {e}")
+            messagebox.showerror("Error", f"Failed to remove words: {e}")
+    
+    def _remove_selected_nouns(self):
+        """Remove selected proper nouns from vocabulary."""
+        if not self.proper_nouns_listbox:
+            return
+        
+        selected_indices = self.proper_nouns_listbox.curselection()
+        if not selected_indices:
+            messagebox.showwarning("No Selection", "Please select proper nouns to remove")
+            return
+        
+        try:
+            # Get selected nouns
+            selected_nouns = [self.proper_nouns_listbox.get(i) for i in selected_indices]
+            
+            if messagebox.askyesno("Confirm Removal", f"Remove {len(selected_nouns)} selected proper nouns?"):
+                # Remove from vocabulary manager
+                for noun in selected_nouns:
+                    self.vocabulary_manager.proper_nouns.discard(noun)
+                
+                # Save changes
+                self.vocabulary_manager.save_vocabulary_preferences()
+                
+                # Refresh display
+                self._refresh_vocabulary_display()
+                
+                messagebox.showinfo("Success", f"Removed {len(selected_nouns)} proper nouns")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to remove proper nouns: {e}")
+            messagebox.showerror("Error", f"Failed to remove proper nouns: {e}")
+    
+    def _clear_words(self):
+        """Clear all custom words."""
+        if messagebox.askyesno("Confirm Clear", "Remove ALL custom words? This cannot be undone!"):
+            try:
+                self.vocabulary_manager.custom_words.clear()
+                self.vocabulary_manager.save_vocabulary_preferences()
+                self._refresh_vocabulary_display()
+                messagebox.showinfo("Success", "All custom words cleared")
+            except Exception as e:
+                self.logger.error(f"Failed to clear words: {e}")
+                messagebox.showerror("Error", f"Failed to clear words: {e}")
+    
+    def _clear_nouns(self):
+        """Clear all proper nouns."""
+        if messagebox.askyesno("Confirm Clear", "Remove ALL proper nouns? This cannot be undone!"):
+            try:
+                self.vocabulary_manager.proper_nouns.clear()
+                self.vocabulary_manager.save_vocabulary_preferences()
+                self._refresh_vocabulary_display()
+                messagebox.showinfo("Success", "All proper nouns cleared")
+            except Exception as e:
+                self.logger.error(f"Failed to clear proper nouns: {e}")
+                messagebox.showerror("Error", f"Failed to clear proper nouns: {e}")
+    
+    def _load_vocabulary_file(self):
+        """Load vocabulary from a file."""
+        file_path = filedialog.askopenfilename(
+            title="Load Vocabulary File",
+            filetypes=[
+                ("JSON files", "*.json"),
+                ("Text files", "*.txt"),
+                ("CSV files", "*.csv"),
+                ("All files", "*.*")
+            ]
+        )
+        
+        if file_path:
+            try:
+                success = self.vocabulary_manager.load_custom_vocabulary(file_path)
+                if success:
+                    self._refresh_vocabulary_display()
+                    messagebox.showinfo("Success", f"Vocabulary loaded from {Path(file_path).name}")
+                else:
+                    messagebox.showerror("Error", "Failed to load vocabulary file")
+            except Exception as e:
+                self.logger.error(f"Failed to load vocabulary file: {e}")
+                messagebox.showerror("Error", f"Failed to load vocabulary file: {e}")
+    
+    def _export_vocabulary_file(self):
+        """Export vocabulary to a file."""
+        file_path = filedialog.asksaveasfilename(
+            title="Export Vocabulary",
+            defaultextension=".json",
+            filetypes=[
+                ("JSON files", "*.json"),
+                ("Text files", "*.txt"),
+                ("All files", "*.*")
+            ]
+        )
+        
+        if file_path:
+            try:
+                # Determine format from extension
+                if file_path.lower().endswith('.json'):
+                    format_type = "json"
+                else:
+                    format_type = "text"
+                
+                success = self.vocabulary_manager.export_vocabulary(file_path, format_type)
+                if success:
+                    messagebox.showinfo("Success", f"Vocabulary exported to {Path(file_path).name}")
+                else:
+                    messagebox.showerror("Error", "Failed to export vocabulary")
+            except Exception as e:
+                self.logger.error(f"Failed to export vocabulary: {e}")
+                messagebox.showerror("Error", f"Failed to export vocabulary: {e}")
+    
+    def _create_new_domain(self):
+        """Create a new domain category."""
+        domain_name = simpledialog.askstring("New Domain", "Enter domain name:")
+        if domain_name:
+            domain_name = domain_name.strip().lower()
+            if domain_name:
+                try:
+                    # Add to vocabulary manager
+                    if domain_name not in self.vocabulary_manager.domain_vocabulary:
+                        self.vocabulary_manager.domain_vocabulary[domain_name] = set()
+                        
+                        # Update combobox values
+                        current_values = list(self.current_domain.get() for _ in range(1))  # Get current
+                        if hasattr(self, 'domain_combo'):
+                            new_values = ['general', 'medical', 'legal', 'technical', 'business', domain_name]
+                            # Would need reference to update combobox values
+                        
+                        messagebox.showinfo("Success", f"Created domain: {domain_name}")
+                    else:
+                        messagebox.showwarning("Exists", f"Domain '{domain_name}' already exists")
+                except Exception as e:
+                    self.logger.error(f"Failed to create domain: {e}")
+                    messagebox.showerror("Error", f"Failed to create domain: {e}")
     
     def _create_button_frame(self):
         """Create bottom button frame."""

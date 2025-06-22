@@ -55,9 +55,11 @@ except ImportError:
 
 try:
     from plyer import notification
+    PLYER_AVAILABLE = True
 except ImportError:
-    print("Error: plyer not installed. Install with: pip install plyer")
-    sys.exit(1)
+    print("Warning: plyer not installed. Using native notifications only.")
+    notification = None
+    PLYER_AVAILABLE = False
 
 try:
     from AppKit import NSPasteboard, NSStringPboardType
@@ -181,6 +183,11 @@ class NotificationManager:
     
     def _test_plyer_compatibility(self):
         """Test if plyer notifications work on this system."""
+        if not PLYER_AVAILABLE:
+            self.logger.warning("plyer not available, using native macOS notifications")
+            self.use_native = True
+            return
+            
         try:
             notification.notify(
                 title="Dicto Initialization",
@@ -206,11 +213,34 @@ class NotificationManager:
         """
         try:
             import subprocess
-            # Escape quotes in title and message
-            safe_title = title.replace('"', '\\"').replace("'", "\\'")
-            safe_message = message.replace('"', '\\"').replace("'", "\\'")
             
-            script = f'display notification "{safe_message}" with title "{safe_title}"'
+            # More comprehensive escaping for AppleScript
+            def escape_applescript_string(text: str) -> str:
+                """Escape a string for use in AppleScript."""
+                # Replace problematic characters in correct order
+                text = text.replace('\\', '\\\\')  # Escape backslashes first
+                text = text.replace('"', '\\"')    # Escape double quotes
+                text = text.replace("'", "\\'")    # Escape single quotes
+                text = text.replace('\n', '\\n')   # Escape newlines
+                text = text.replace('\r', '\\r')   # Escape carriage returns
+                text = text.replace('\t', '\\t')   # Escape tabs
+                # Handle special punctuation that can break AppleScript
+                text = text.replace('`', "'")      # Replace backticks with single quotes
+                text = text.replace('$', '\\$')    # Escape dollar signs
+                text = text.replace('…', '...')    # Replace ellipsis with three dots
+                # Remove any remaining non-printable characters
+                text = ''.join(char if ord(char) >= 32 and ord(char) <= 126 or char in '\n\r\t' else ' ' for char in text)
+                return text
+            
+            safe_title = escape_applescript_string(title)
+            safe_message = escape_applescript_string(message)
+            
+            # Truncate message if too long (AppleScript has limits)
+            if len(safe_message) > 180:
+                safe_message = safe_message[:177] + "..."
+            
+            # Use single quotes for AppleScript to avoid escaping issues
+            script = f"display notification \"{safe_message}\" with title \"{safe_title}\""
             result = subprocess.run(
                 ["osascript", "-e", script],
                 capture_output=True,
@@ -243,6 +273,9 @@ class NotificationManager:
         if self.use_native:
             return self._show_native_notification(title, message)
         else:
+            if not PLYER_AVAILABLE:
+                return self._show_native_notification(title, message)
+                
             try:
                 notification.notify(
                     title=title,
@@ -268,15 +301,18 @@ class NotificationManager:
         """Show notification when recording stops."""
         return self.show_notification(
             "⏹️ Recording Stopped",
-            "Processing transcription..."
+            "🔄 Transcribing audio..."
         )
     
     def notify_transcription_complete(self, text: str) -> bool:
         """Show notification when transcription is complete."""
-        preview = text[:50] + "..." if len(text) > 50 else text
+        # Clean the text preview for notification
+        preview = text.strip()[:45] if text else "No text"
+        if len(text) > 45:
+            preview += "..."
         return self.show_notification(
             "✅ Transcription Complete",
-            f"Text automatically inserted: {preview}"
+            f"📝 Inserted: {preview}"
         )
     
     def notify_error(self, error_message: str) -> bool:

@@ -533,22 +533,33 @@ class MenuBarManager:
                            Format: {"Section": {"Item Name": "action_id"}}
         """
         try:
-            if not hasattr(self, 'app'):
+            if not hasattr(self, 'app') or not self.app:
                 self.logger.error("Cannot create menu: app not initialized")
                 return
             
+            # Clear existing menu items
+            self.menu_items.clear()
+            
+            first_section = True
             for section_name, items in menu_structure.items():
-                # Create section separator if this isn't the first section
-                if len(self.menu_items) > 0:
-                    separator = rumps.separator
-                    self.app.menu.add(separator)
+                # Add section separator if this isn't the first section
+                if not first_section:
+                    self.app.menu.add(rumps.separator)
+                first_section = False
                 
                 # Add section items
                 for item_name, action_id in items.items():
+                    # Handle separators
+                    if item_name == "---" or action_id is None:
+                        self.app.menu.add(rumps.separator)
+                        continue
+                    
+                    # Create menu item
                     menu_item = rumps.MenuItem(item_name)
                     
-                    # Set callback based on action_id pattern
-                    menu_item.callback = self._create_menu_callback(action_id)
+                    # Set callback if action_id is provided
+                    if action_id:
+                        menu_item.callback = self._create_menu_callback(action_id)
                     
                     self.app.menu.add(menu_item)
                     self.menu_items[item_name] = menu_item
@@ -557,28 +568,67 @@ class MenuBarManager:
             
         except Exception as e:
             self.logger.error(f"Failed to create menu from structure: {e}")
+            # Log the exception details for debugging
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
 
     def _create_menu_callback(self, action_id: str):
         """Create a callback function for the given action_id."""
         def callback(sender):
             try:
                 # Handle callbacks based on action_id pattern
-                if action_id.startswith('record_'):
+                if action_id in ['record', 'start', 'stop', 'cancel']:
+                    if self.recording_callback:
+                        self.recording_callback(action_id)
+                elif action_id.startswith('record_'):
                     action = action_id.replace('record_', '')
                     if self.recording_callback:
                         self.recording_callback(action)
+                elif action_id in ['transcribe_file', 'paste_last']:
+                    if self.transcription_callback:
+                        self.transcription_callback(action_id)
                 elif action_id.startswith('transcribe_'):
                     action = action_id.replace('transcribe_', '')
                     if self.transcription_callback:
                         self.transcription_callback(action)
+                elif action_id in ['clear_history', 'view_history']:
+                    if self.history_callback:
+                        self.history_callback(action_id)
                 elif action_id.startswith('history_'):
                     action = action_id.replace('history_', '')
                     if self.history_callback:
                         self.history_callback(action)
+                elif action_id in ['show', 'audio', 'transcription', 'profiles', 'hotkeys', 'advanced', 'export', 'import']:
+                    if self.settings_callback:
+                        self.settings_callback(action_id)
                 elif action_id.startswith('settings_'):
                     action = action_id.replace('settings_', '')
                     if self.settings_callback:
                         self.settings_callback(action)
+                elif action_id in ['view_logs', 'debug_mode', 'run_tests', 'generate_report', 'check_health']:
+                    if self.debug_callback:
+                        self.debug_callback(action_id)
+                elif action_id.startswith('debug_'):
+                    action = action_id.replace('debug_', '')
+                    if self.debug_callback:
+                        self.debug_callback(action)
+                elif action_id in ['check_updates', 'documentation', 'report_issue']:
+                    if self.help_callback:
+                        self.help_callback(action_id)
+                elif action_id.startswith('help_'):
+                    action = action_id.replace('help_', '')
+                    if self.help_callback:
+                        self.help_callback(action)
+                elif action_id in ['about_dicto']:
+                    if self.about_callback:
+                        self.about_callback(action_id)
+                elif action_id.startswith('about_'):
+                    action = action_id.replace('about_', '')
+                    if self.about_callback:
+                        self.about_callback(action)
+                elif action_id == 'quit_dicto':
+                    if self.quit_callback:
+                        self.quit_callback()
                 elif action_id.startswith('shortcuts_'):
                     action = action_id.replace('shortcuts_', '')
                     if self.shortcuts_callback:
@@ -587,26 +637,14 @@ class MenuBarManager:
                     action = action_id.replace('status_', '')
                     if self.status_callback:
                         self.status_callback(action)
-                elif action_id.startswith('debug_'):
-                    action = action_id.replace('debug_', '')
-                    if self.debug_callback:
-                        self.debug_callback(action)
-                elif action_id.startswith('help_'):
-                    action = action_id.replace('help_', '')
-                    if self.help_callback:
-                        self.help_callback(action)
-                elif action_id.startswith('about_'):
-                    action = action_id.replace('about_', '')
-                    if self.about_callback:
-                        self.about_callback(action)
-                elif action_id == 'quit_dicto':
-                    if self.quit_callback:
-                        self.quit_callback()
                 else:
                     # Generic callback
                     self.logger.info(f"Generic menu action: {action_id}")
             except Exception as e:
                 self.logger.error(f"Menu callback error for {action_id}: {e}")
+                # Log the exception details for debugging
+                import traceback
+                self.logger.error(f"Traceback: {traceback.format_exc()}")
         
         return callback
     
