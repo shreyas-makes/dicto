@@ -13,6 +13,19 @@ A simple, offline AI transcription app for macOS that uses OpenAI's Whisper (via
 
 ## 🚀 Quick Start
 
+### Two Ways to Use Dicto
+
+**Option 1: Standalone macOS App (Recommended)**
+Build Dicto as a native macOS application that installs to your Applications folder. See [BUILD_MACOS_APP.md](BUILD_MACOS_APP.md) for detailed instructions.
+
+```bash
+./build_app.sh
+cp -r dist/Dicto.app /Applications/
+```
+
+**Option 2: Run from Python (Developer Mode)**
+Run Dicto directly from Python for development or testing.
+
 ### Prerequisites
 
 - macOS (tested on macOS 14+)

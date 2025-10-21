@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Dicto</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>Dicto</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>com.dicto.app</string>
+
+    <key>CFBundleVersion</key>
+    <string>1.0.1</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.1</string>
+
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <key>CFBundleSignature</key>
+    <string>????</string>
+
+    <key>CFBundleExecutable</key>
+    <string>dicto_main</string>
+
+    <key>CFBundleGetInfoString</key>
+    <string>AI-powered voice transcription for macOS</string>
+
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2025. All rights reserved.</string>
+
+    <!-- Run as menu bar app (no Dock icon) -->
+    <key>LSUIElement</key>
+    <true/>
+
+    <!-- Privacy permissions -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Dicto needs microphone access to record audio for transcription.</string>
+
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Dicto needs to send keystrokes to insert transcribed text into other applications.</string>
+
+    <!-- Accessibility permission for global hotkeys -->
+    <key>NSAppleScriptEnabled</key>
+    <true/>
+
+    <!-- High resolution support -->
+    <key>NSHighResolutionCapable</key>
+    <true/>
+
+    <!-- App category -->
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+
+    <!-- Minimum macOS version -->
+    <key>LSMinimumSystemVersion</key>
+    <string>10.14</string>
+</dict>
+</plist>
