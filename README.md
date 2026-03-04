@@ -2,7 +2,8 @@
 
 A simple, offline AI transcription app for macOS that uses Parakeet model with global hotkey support.
 
-![Uploading Github Banner Design Request.png…]()
+<img width="1536" height="1024" alt="Github Banner Design Request" src="https://github.com/user-attachments/assets/fa29ef54-53eb-4d3a-8531-fa8898a43a1b" />
+
 
 
 ## ✨ Features
