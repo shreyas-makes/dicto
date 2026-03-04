@@ -1,6 +1,9 @@
 # 🎤 Dicto - AI Transcription App
 
-A simple, offline AI transcription app for macOS that uses OpenAI's Whisper (via whisper.cpp) with global hotkey support.
+A simple, offline AI transcription app for macOS that uses Parakeet model with global hotkey support.
+
+![Uploading Github Banner Design Request.png…]()
+
 
 ## ✨ Features
 
